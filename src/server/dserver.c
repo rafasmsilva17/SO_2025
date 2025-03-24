@@ -6,11 +6,11 @@
 #include <signal.h>
 #include <errno.h>
 
-#define PIPE_SC "pipes/server_fifo"
+#define PIPE_SC "../../pipes/server_fifo"
 #define BUFFER_SIZE 512
 
 void cleanup(int signum) {
-    unlink(PIPE_SC);  // Remove FIFO file
+    unlink(PIPE_SC);  // Remove FIFO 
     printf("\nFIFO removed. Server shutting down...\n");
     exit(0);
 }
