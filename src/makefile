@@ -1,24 +1,21 @@
-CC = gcc
+CC=gcc
+CFLAGS=-Wall -Wextra
 
-CFLAGS = -Wall -g -Iinclude
+CLIENT_SRC=client/dclient.c
+SERVER_SRC=server/dserver.c
 
-LDFLAGS =
+CLIENT_BIN=bin/dclient
+SERVER_BIN=bin/dserver
 
-all: folders dserver dclient
-dserver: bin/dserver
-dclient: bin/dclient
+all: $(CLIENT_BIN) $(SERVER_BIN)
 
-folders:
-	@mkdir -p src include obj bin tmp
+$(CLIENT_BIN): $(CLIENT_SRC)
+	@mkdir -p bin
+	$(CC) $(CFLAGS) -o $@ $^
 
-bin/dserver: obj/dserver.o
-	$(CC) $(LDFLAGS) $^ -o $@
+$(SERVER_BIN): $(SERVER_SRC)
+	@mkdir -p bin
+	$(CC) $(CFLAGS) -o $@ $^
 
-bin/dclient: obj/dclient.o
-	$(CC) $(LDFLAGS) $^ -o $@
-
-obj/%.o: src/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
-	
 clean:
-	rm -f obj/* tmp/* bin/*
+	rm -rf bin pipes/client_*_fifo
