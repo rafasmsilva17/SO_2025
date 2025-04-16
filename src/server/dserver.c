@@ -53,12 +53,22 @@ void handle_add(char *args[], const char *client_fifo) {
         return;
     }
 
+    // Verifica se o ficheiro existe na diretoria base
+    char full_path[128];
+    snprintf(full_path, sizeof(full_path), "../docs/%s", args[4]);
+    printf("DEBUG: full_path = %s\n", full_path);
+    if (access(full_path, F_OK) != 0) {
+        send_response(client_fifo, "ERROR|Ficheiro não encontrado na diretoria base.\n");
+        return;
+    }
+
+    // Gera chave e armazena meta-informação
     char *key = generate_key();
     strcpy(docs[doc_count].key, key);
     strcpy(docs[doc_count].title, args[1]);
     strcpy(docs[doc_count].authors, args[2]);
     strcpy(docs[doc_count].year, args[3]);
-    strcpy(docs[doc_count].path, args[4]);
+    strcpy(docs[doc_count].path, args[4]);  // só o caminho relativo
     docs[doc_count].active = 1;
     doc_count++;
 
@@ -66,6 +76,7 @@ void handle_add(char *args[], const char *client_fifo) {
     snprintf(response, sizeof(response), "OK|key=%s\n", key);
     send_response(client_fifo, response);
 }
+
 
 void handle_consult(const char *key, const char *client_fifo) {
     int idx = find_doc_index(key);
@@ -185,6 +196,7 @@ int main() {
             args[i++] = token;
             token = strtok(NULL, "|");
         }
+        
 
         if (i < 2) continue; // inválido
         char *op = args[0];

@@ -33,6 +33,9 @@ void send_request(const char *message, const char *client_fifo) {
 
     char buffer[512];
     int n = read(client_fd, buffer, sizeof(buffer) - 1);
+    if (n < 0) {
+        perror("Erro ao ler resposta do servidor");
+    }
     if (n >= 0) {
         buffer[n] = '\0';
         printf("%s", buffer);
@@ -48,12 +51,18 @@ int main(int argc, char *argv[]) {
 
     pid_t pid = getpid();
     char client_fifo[64];
-    snprintf(client_fifo, sizeof(client_fifo), "pipes/client_%d_fifo", pid);
+    snprintf(client_fifo, sizeof(client_fifo), "../pipes/client_%d_fifo", pid);
     mkfifo(client_fifo, 0666);
 
     char message[MAX_MSG] = {0};
 
     if (strcmp(argv[1], "-a") == 0 && argc == 6) {
+        if (access(argv[5], F_OK) != 0) {
+            fprintf(stderr, "Erro: O ficheiro '%s' não existe.\n", argv[5]);
+            unlink(client_fifo);
+            exit(1);
+        }
+
         snprintf(message, sizeof(message), "ADD|%s|%s|%s|%s|%s",
                  argv[2], argv[3], argv[4], argv[5], client_fifo);
     }
