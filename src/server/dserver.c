@@ -9,7 +9,7 @@
 
 #define SERVER_FIFO "../pipes/server_fifo"
 #define MAX_MSG 512
-#define MAX_DOCS 100
+#define MAX_DOCS 100000
 
 typedef struct {
     char key[16];
@@ -55,7 +55,7 @@ void handle_add(char *args[], const char *client_fifo) {
 
     // Verifica se o ficheiro existe na diretoria base
     char full_path[128];
-    snprintf(full_path, sizeof(full_path), "../docs/%s", args[4]);
+    snprintf(full_path, sizeof(full_path), "%s", args[4]);
     printf("DEBUG: full_path = %s\n", full_path);
     if (access(full_path, F_OK) != 0) {
         send_response(client_fifo, "ERROR|Ficheiro não encontrado na diretoria base.\n");
@@ -91,7 +91,7 @@ void handle_consult(const char *key, const char *client_fifo) {
     send_response(client_fifo, buffer);
 }
 
-void handle_delete(const char *key, const char *client_fifo) {
+void handle_delete(const char *key, const char *client_fifo) { //mete inativo ou deleta mesmo?
     int idx = find_doc_index(key);
     if (idx == -1) {
         send_response(client_fifo, "ERROR|Documento não encontrado.\n");
@@ -133,8 +133,15 @@ void handle_lines(const char *key, const char *keyword, const char *client_fifo)
     }
 }
 
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 void handle_search(const char *keyword, const char *client_fifo) {
-    char result[512] = "OK|";
+    char result[512];
+    snprintf(result, sizeof(result), "OK|");  // Inicializa de forma segura
     int found = 0;
 
     for (int i = 0; i < doc_count; ++i) {
@@ -143,24 +150,34 @@ void handle_search(const char *keyword, const char *client_fifo) {
         int pid = fork();
         if (pid == 0) {
             execlp("grep", "grep", "-q", keyword, docs[i].path, NULL);
-            exit(1);
+            exit(1); // se execlp falhar
         }
         int status;
         waitpid(pid, &status, 0);
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            strcat(result, docs[i].key);
-            strcat(result, ";");
-            found = 1;
+            // Verifica se ainda tem espaço antes de concatenar
+            size_t len = strlen(result);
+            size_t space_left = sizeof(result) - len - 2; // -2 para ';' e '\0'
+
+            if (space_left > strlen(docs[i].key)) {
+                strcat(result, docs[i].key);
+                strcat(result, ";");
+                found = 1;
+            } else {
+                // Se não couber mais, já manda o que tem
+                break;
+            }
         }
     }
 
     if (!found) {
         send_response(client_fifo, "OK|Nenhum documento encontrado.\n");
     } else {
-        strcat(result, "\n");
+        strcat(result, "\n"); // Garantido que ainda cabe
         send_response(client_fifo, result);
     }
 }
+
 
 int main() {
     unlink(SERVER_FIFO);
