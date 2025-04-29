@@ -7,8 +7,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define SERVER_FIFO "../pipes/server_fifo"
+#include "server_utils.h"
+#include "document.h"
+
 #define MAX_MSG 512
+<<<<<<< Updated upstream
 #define MAX_DOCS 100000
 
 typedef struct {
@@ -177,6 +180,8 @@ void handle_search(const char *keyword, const char *client_fifo) {
         send_response(client_fifo, result);
     }
 }
+=======
+>>>>>>> Stashed changes
 
 
 int main() {
