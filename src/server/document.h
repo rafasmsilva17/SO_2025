@@ -13,6 +13,7 @@ void handle_delete(const char *key, const char *client_fifo);
 
 void handle_lines(const char *key, const char *keyword, const char *client_fifo);
 
-void handle_search(const char *keyword, const char *client_fifo);
+void handle_search(char *keyword, char *nr_processes_str, const char *client_fifo);
+
 
 #endif

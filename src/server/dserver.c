@@ -13,13 +13,18 @@
 #define MAX_MSG 512
 #define SERVER_FIFO "../pipes/server_fifo"
 
-
 int main() {
+    // Inicialização do servidor
     unlink(SERVER_FIFO);
     if (mkfifo(SERVER_FIFO, 0666) < 0) {
         perror("Erro ao criar FIFO do servidor");
         exit(1);
     }
+
+    // Persistência e cache
+    load_metadata_from_file();
+    init_cache(20); // cache de 20 entradas (ou configurable)
+
     printf("Servidor aguardando no FIFO...\n");
 
     char buffer[MAX_MSG];
@@ -48,26 +53,33 @@ int main() {
             args[i++] = token;
             token = strtok(NULL, "|");
         }
-        
 
         if (i < 2) continue; // inválido
         char *op = args[0];
-        char *client_fifo = args[i-1];
+        char *client_fifo = args[i - 1];
 
-        if (strcmp(op, "ADD") == 0 && i == 6) {
+        if (strcmp(op, "-a") == 0 && i == 6) {
             handle_add(args, client_fifo);
-        } else if (strcmp(op, "CONSULT") == 0 && i == 3) {
+        } else if (strcmp(op, "-c") == 0 && i == 3) {
             handle_consult(args[1], client_fifo);
-        } else if (strcmp(op, "DELETE") == 0 && i == 3) {
+        } else if (strcmp(op, "-d") == 0 && i == 3) {
             handle_delete(args[1], client_fifo);
-        } else if (strcmp(op, "LINES") == 0 && i == 4) {
+        } else if (strcmp(op, "-l") == 0 && i == 4) {
             handle_lines(args[1], args[2], client_fifo);
-        } else if (strcmp(op, "SEARCH") == 0 && i == 3) {
-            handle_search(args[1], client_fifo);
+        } else if (strcmp(op, "-s") == 0 && i == 4) {
+            handle_search(args[1], args[2], client_fifo);
+        } else if (strcmp(op, "-f") == 0 && i == 2) {
+            save_metadata_to_file();
+            send_response(client_fifo, "Servidor encerrado.\n");
+            break;
         } else {
             send_response(client_fifo, "ERROR|Comando inválido ou mal formatado.\n");
         }
     }
+
+    // Encerramento
+    save_metadata_to_file();
+    free_cache();
 
     return 0;
 }

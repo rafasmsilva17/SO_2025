@@ -30,23 +30,24 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        snprintf(message, sizeof(message), "ADD|%s|%s|%s|%s|%s",
+        snprintf(message, sizeof(message), "-a|%s|%s|%s|%s|%s",
                  argv[2], argv[3], argv[4], argv[5], client_fifo);
     }
     else if (strcmp(argv[1], "-c") == 0 && argc == 3) {
-        snprintf(message, sizeof(message), "CONSULT|%s|%s", argv[2], client_fifo);
+        snprintf(message, sizeof(message), "-c|%s|%s", argv[2], client_fifo);
     }
     else if (strcmp(argv[1], "-d") == 0 && argc == 3) {
-        snprintf(message, sizeof(message), "DELETE|%s|%s", argv[2], client_fifo);
+        snprintf(message, sizeof(message), "-d|%s|%s", argv[2], client_fifo);
     }
     else if (strcmp(argv[1], "-l") == 0 && argc == 4) {
-        snprintf(message, sizeof(message), "LINES|%s|%s|%s", argv[2], argv[3], client_fifo);
+        snprintf(message, sizeof(message), "-l|%s|%s|%s", argv[2], argv[3], client_fifo);
     }
-    else if (strcmp(argv[1], "-s") == 0 && argc == 3) {
-        snprintf(message, sizeof(message), "SEARCH|%s|%s", argv[2], client_fifo);
-    }
-    else {
-        fprintf(stderr, "Comando inválido ou argumentos insuficientes.\n");
+    else if (strcmp(argv[1], "-s") == 0 && argc == 4) {
+        snprintf(message, sizeof(message), "-s|%s|%s|%s", client_fifo, argv[2], argv[3]);
+    } else if (strcmp(argv[1], "-f") == 0) {
+        snprintf(message, sizeof(message), "-f|%s", client_fifo);
+    } else {
+        fprintf(stderr, "Comando inválido ou argumentos em falta.\n");
         unlink(client_fifo);
         exit(1);
     }

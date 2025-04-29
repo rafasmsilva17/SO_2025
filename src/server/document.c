@@ -109,41 +109,54 @@ void handle_lines(const char *key, const char *keyword, const char *client_fifo)
     }
 }
 
-void handle_search(const char *keyword, const char *client_fifo) {
-    char result[512];
-    snprintf(result, sizeof(result), "OK|");  // Inicializa de forma segura
-    int found = 0;
+void handle_search(char *keyword, char *nr_processes_str, const char *client_fifo)
+ {
+    char *keyword = args[2];
+            int max_proc = atoi(args[3]);
 
-    for (int i = 0; i < doc_count; ++i) {
-        if (!docs[i].active) continue;
+            int num_docs = get_all_doc_paths(NULL); // Só para contar
+            char **paths = malloc(sizeof(char*) * num_docs);
+            get_all_doc_paths(paths);
 
-        int pid = fork();
-        if (pid == 0) {
-            execlp("grep", "grep", "-q", keyword, docs[i].path, NULL);
-            exit(1); // se execlp falhar
-        }
-        int status;
-        waitpid(pid, &status, 0);
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            // Verifica se ainda tem espaço antes de concatenar
-            size_t len = strlen(result);
-            size_t space_left = sizeof(result) - len - 2; // -2 para ';' e '\0'
+            int per_proc = (num_docs + max_proc - 1) / max_proc;
+            int pipefds[max_proc][2];
+            for (int p = 0; p < max_proc; p++) pipe(pipefds[p]);
 
-            if (space_left > strlen(docs[i].key)) {
-                strcat(result, docs[i].key);
-                strcat(result, ";");
-                found = 1;
-            } else {
-                // Se não couber mais, já manda o que tem
-                break;
+            for (int p = 0; p < max_proc; p++) {
+                if (fork() == 0) {
+                    dup2(pipefds[p][1], STDOUT_FILENO);
+                    close(pipefds[p][0]);
+                    close(pipefds[p][1]);
+
+                    char *args_exec[per_proc + 4];
+                    args_exec[0] = "grep";
+                    args_exec[1] = "-l";
+                    args_exec[2] = keyword;
+
+                    int start = p * per_proc;
+                    int j = 3;
+                    for (int k = start; k < start + per_proc && k < num_docs; k++) {
+                        args_exec[j++] = paths[k];
+                    }
+                    args_exec[j] = NULL;
+                    execvp("grep", args_exec);
+                    exit(1);
+                }
+                close(pipefds[p][1]);
             }
-        }
-    }
 
-    if (!found) {
-        send_response(client_fifo, "OK|Nenhum documento encontrado.\n");
-    } else {
-        strcat(result, "\n"); // Garantido que ainda cabe
-        send_response(client_fifo, result);
-    }
+            char result[2048] = "";
+            for (int p = 0; p < max_proc; p++) {
+                char temp[512];
+                int r = read(pipefds[p][0], temp, sizeof(temp) - 1);
+                if (r > 0) {
+                    temp[r] = '\0';
+                    strcat(result, temp);
+                }
+                close(pipefds[p][0]);
+                wait(NULL);
+            }
+
+            free(paths);
+            send_response(client_fifo, result[0] ? result : "Nenhum resultado.\n");
 }
