@@ -6,42 +6,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>  // Incluído para resolver o erro com 'errno'
+#include "client_utils.h"
 
-#define SERVER_FIFO "../pipes/server_fifo"
 #define MAX_MSG 512
-
-void send_request(const char *message, const char *client_fifo) {
-    int server_fd;
-    while ((server_fd = open(SERVER_FIFO, O_WRONLY)) < 0) {
-        if (errno == ENOENT) {
-            // FIFO do servidor não existe, esperando...
-            usleep(100000); // Espera de 100ms
-        } else {
-            perror("Erro ao abrir FIFO do servidor");
-            exit(1);
-        }
-    }
-
-    write(server_fd, message, strlen(message));
-    close(server_fd);
-
-    int client_fd = open(client_fifo, O_RDONLY);
-    if (client_fd < 0) {
-        perror("Erro ao abrir FIFO do cliente");
-        exit(1);
-    }
-
-    char buffer[512];
-    int n = read(client_fd, buffer, sizeof(buffer) - 1);
-    if (n < 0) {
-        perror("Erro ao ler resposta do servidor");
-    }
-    if (n >= 0) {
-        buffer[n] = '\0';
-        printf("%s", buffer);
-    }
-    close(client_fd);
-}
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {

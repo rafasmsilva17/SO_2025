@@ -1,4 +1,12 @@
 #include "server_utils.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 void send_response(const char *client_fifo, const char *message) {
     int fd = open(client_fifo, O_WRONLY);
