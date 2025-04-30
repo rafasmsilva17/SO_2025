@@ -24,6 +24,14 @@ typedef struct document{
 Document docs[MAX_DOCS];
 int doc_count = 0;
 
+Document* get_all_documents() {
+    return docs;
+}
+
+// Retorna número total de documentos
+int get_total_documents() {
+    return doc_count;
+}
 
 int find_doc_index(const char *key) {
     for (int i = 0; i < doc_count; ++i) {
@@ -49,8 +57,11 @@ void handle_add(char *args[], const char *client_fifo) {
     docs[doc_count].active = 1;
     doc_count++;
 
+    int key_number;
+    sscanf(key, "doc%d", &key_number);  // Extrai apenas o número
+
     char response[64];
-    snprintf(response, sizeof(response), "OK|key=%s\n", key);
+    snprintf(response, sizeof(response), "Document %d indexed\n", key_number);
     send_response(client_fifo, response);
 }
 
@@ -62,7 +73,7 @@ void handle_consult(const char *key, const char *client_fifo) {
     }
 
     char buffer[512];
-    snprintf(buffer, sizeof(buffer), "OK|%s|%s|%s|%s\n",
+    snprintf(buffer, sizeof(buffer), "Title: %s\nAuthors: %s\nYear: %sPath: %s\n",
              docs[idx].title, docs[idx].authors, docs[idx].year, docs[idx].path);
     send_response(client_fifo, buffer);
 }
@@ -75,7 +86,9 @@ void handle_delete(const char *key, const char *client_fifo) {
     }
 
     docs[idx].active = 0;
-    send_response(client_fifo, "OK|Documento removido com sucesso.\n");
+    char response [64];
+    snprintf(response, sizeof(response), "Index entry %d deleted\n", idx);
+    send_response(client_fifo, response);
 }
 
 void handle_lines(const char *key, const char *keyword, const char *client_fifo) {
@@ -104,59 +117,98 @@ void handle_lines(const char *key, const char *keyword, const char *client_fifo)
         close(pipefd[0]);
 
         char response[128];
-        snprintf(response, sizeof(response), "OK|Linhas encontradas: %s", buffer);
+        snprintf(response, sizeof(response), "%s", buffer);
         send_response(client_fifo, response);
     }
 }
 
-void handle_search(char *keyword, char *nr_processes_str, const char *client_fifo)
- {
-    char *keyword = args[2];
-            int max_proc = atoi(args[3]);
+void handle_search(char *keyword, char *nr_processes_str, const char *client_fifo) {
+    int max_procs = atoi(nr_processes_str);
+    if (max_procs <= 0) {
+        send_response(client_fifo, "Número de processos inválido.\n");
+        return;
+    }
 
-            int num_docs = get_all_doc_paths(NULL); // Só para contar
-            char **paths = malloc(sizeof(char*) * num_docs);
-            get_all_doc_paths(paths);
+    Document *documents = get_all_documents();
+    int total = get_total_documents();
 
-            int per_proc = (num_docs + max_proc - 1) / max_proc;
-            int pipefds[max_proc][2];
-            for (int p = 0; p < max_proc; p++) pipe(pipefds[p]);
+    int active_procs = 0;
+    int pipe_fds[2];
+    pipe(pipe_fds); // pipe para recolher os resultados dos filhos
 
-            for (int p = 0; p < max_proc; p++) {
-                if (fork() == 0) {
-                    dup2(pipefds[p][1], STDOUT_FILENO);
-                    close(pipefds[p][0]);
-                    close(pipefds[p][1]);
+    for (int i = 0; i < total; ++i) {
+        if (!documents[i].active) continue;
 
-                    char *args_exec[per_proc + 4];
-                    args_exec[0] = "grep";
-                    args_exec[1] = "-l";
-                    args_exec[2] = keyword;
+        while (active_procs >= max_procs) {
+            wait(NULL);
+            active_procs--;
+        }
 
-                    int start = p * per_proc;
-                    int j = 3;
-                    for (int k = start; k < start + per_proc && k < num_docs; k++) {
-                        args_exec[j++] = paths[k];
-                    }
-                    args_exec[j] = NULL;
-                    execvp("grep", args_exec);
-                    exit(1);
-                }
-                close(pipefds[p][1]);
+        pid_t pid = fork();
+        if (pid == 0) {
+            // filho
+            close(pipe_fds[0]);
+
+            int grep_pipe[2];
+            pipe(grep_pipe);
+
+            pid_t grep_pid = fork();
+            if (grep_pid == 0) {
+                // neto executa grep
+                dup2(grep_pipe[1], STDOUT_FILENO);
+                close(grep_pipe[0]);
+                close(grep_pipe[1]);
+                execlp("grep", "grep", "-q", keyword, documents[i].path, NULL);
+                exit(2); // erro ao executar grep
             }
 
-            char result[2048] = "";
-            for (int p = 0; p < max_proc; p++) {
-                char temp[512];
-                int r = read(pipefds[p][0], temp, sizeof(temp) - 1);
-                if (r > 0) {
-                    temp[r] = '\0';
-                    strcat(result, temp);
-                }
-                close(pipefds[p][0]);
-                wait(NULL);
-            }
+            close(grep_pipe[1]);
+            int status;
+            waitpid(grep_pid, &status, 0);
 
-            free(paths);
-            send_response(client_fifo, result[0] ? result : "Nenhum resultado.\n");
+            if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+                // documento contém a keyword
+                int doc_num;
+                sscanf(documents[i].key, "doc%d", &doc_num);
+                char msg[64];
+                snprintf(msg, sizeof(msg), "%d\n", doc_num);
+                write(pipe_fds[1], msg, strlen(msg));
+            }
+            close(grep_pipe[0]);
+            close(pipe_fds[1]);
+            exit(0);
+        } else if (pid > 0) {
+            active_procs++;
+        } else {
+            perror("fork");
+        }
+    }
+
+    while (active_procs-- > 0) {
+        wait(NULL);
+    }
+
+    // recolher resultados
+    close(pipe_fds[1]);
+    char result[2048] = "";
+    char line[64];
+    int first = 1;
+    strcat(result, "[");
+
+    int n;
+    while ((n = read(pipe_fds[0], line, sizeof(line) - 1)) > 0) {
+        line[n] = '\0';
+        int doc_id = atoi(line);
+        char temp[32];
+        if (!first) {
+            strcat(result, ", ");
+        }
+        snprintf(temp, sizeof(temp), "%d", doc_id);
+        strcat(result, temp);
+        first = 0;
+    }
+    close(pipe_fds[0]);
+    strcat(result, "]\n");
+
+    send_response(client_fifo, result);
 }
