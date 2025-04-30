@@ -73,7 +73,7 @@ void handle_consult(const char *key, const char *client_fifo) {
     }
 
     char buffer[512];
-    snprintf(buffer, sizeof(buffer), "Title: %s\nAuthors: %s\nYear: %sPath: %s\n",
+    snprintf(buffer, sizeof(buffer), "Title: %s\nAuthors: %s\nYear: %s\nPath: %s\n",
              docs[idx].title, docs[idx].authors, docs[idx].year, docs[idx].path);
     send_response(client_fifo, buffer);
 }
