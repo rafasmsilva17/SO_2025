@@ -66,8 +66,13 @@ int main() {
             handle_delete(args[1], client_fifo);
         } else if (strcmp(op, "-l") == 0 && i == 4) {
             handle_lines(args[1], args[2], client_fifo);
-        } else if (strcmp(op, "-s") == 0 && i == 4) {
-            handle_search(args[1], args[2], client_fifo);
+        } else if (strcmp(op, "-s") == 0 && (i == 3 || i == 4)) {
+            if (i == 3) {
+                handle_search(args[1], NULL, client_fifo); // sem limite de processos
+            } else {
+                handle_search(args[1], args[2], client_fifo); // com limite
+            }
+
         } else if (strcmp(op, "-f") == 0 && i == 2) {
             //save_metadata_to_file();
             save = 0; //guarda no ficheiro

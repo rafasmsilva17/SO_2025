@@ -32,27 +32,41 @@ int main(int argc, char *argv[]) {
 
         snprintf(message, sizeof(message), "-a|%s|%s|%s|%s|%s",
                  argv[2], argv[3], argv[4], argv[5], client_fifo);
+        send_request(message, client_fifo);
     }
     else if (strcmp(argv[1], "-c") == 0 && argc == 3) {
         snprintf(message, sizeof(message), "-c|%s|%s", argv[2], client_fifo);
+        send_request(message, client_fifo);
     }
     else if (strcmp(argv[1], "-d") == 0 && argc == 3) {
         snprintf(message, sizeof(message), "-d|%s|%s", argv[2], client_fifo);
+        send_request(message, client_fifo);
     }
     else if (strcmp(argv[1], "-l") == 0 && argc == 4) {
         snprintf(message, sizeof(message), "-l|%s|%s|%s", argv[2], argv[3], client_fifo);
+        send_request(message, client_fifo);
     }
-    else if (strcmp(argv[1], "-s") == 0 && argc == 4) {
-        snprintf(message, sizeof(message), "-s|%s|%s|%s", client_fifo, argv[2], argv[3]);
+    else if (strcmp(argv[1], "-s") == 0 && (argc == 3 || argc == 4)) {
+        // ./dclient -s keyword [n_processos]
+        char message[512];
+        if (argc == 3) {
+            snprintf(message, sizeof(message), "-s|%s|%s", argv[2], client_fifo);
+        } else {
+            snprintf(message, sizeof(message), "-s|%s|%s|%s", argv[2], argv[3], client_fifo);
+        }
+        send_request(message, client_fifo);
+    
+
     } else if (strcmp(argv[1], "-f") == 0) {
         snprintf(message, sizeof(message), "-f|%s", client_fifo);
+        send_request(message, client_fifo);
     } else {
         fprintf(stderr, "Comando inválido ou argumentos em falta.\n");
         unlink(client_fifo);
         exit(1);
     }
 
-    send_request(message, client_fifo);
+    
 
     unlink(client_fifo);
     return 0;

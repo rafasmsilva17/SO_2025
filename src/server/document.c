@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #define SERVER_FIFO "../pipes/server_fifo"
 #define MAX_DOCS 100000
+#define BUFFER_SIZE 1024
 
 
 typedef struct document{
@@ -121,12 +122,14 @@ void handle_lines(const char *key, const char *keyword, const char *client_fifo)
         send_response(client_fifo, response);
     }
 }
-
 void handle_search(char *keyword, char *nr_processes_str, const char *client_fifo) {
-    int max_procs = atoi(nr_processes_str);
-    if (max_procs <= 0) {
-        send_response(client_fifo, "Número de processos inválido.\n");
-        return;
+    int max_procs = 1;
+    if (nr_processes_str != NULL) {
+        max_procs = atoi(nr_processes_str);
+        if (max_procs <= 0) {
+            send_response(client_fifo, "Número de processos inválido.\n");
+            return;
+        }
     }
 
     Document *documents = get_all_documents();
@@ -134,7 +137,11 @@ void handle_search(char *keyword, char *nr_processes_str, const char *client_fif
 
     int active_procs = 0;
     int pipe_fds[2];
-    pipe(pipe_fds); // pipe para recolher os resultados dos filhos
+    if (pipe(pipe_fds) == -1) {
+        perror("Erro ao criar pipe");
+        send_response(client_fifo, "Erro interno.\n");
+        return;
+    }
 
     for (int i = 0; i < total; ++i) {
         if (!documents[i].active) continue;
@@ -147,68 +154,59 @@ void handle_search(char *keyword, char *nr_processes_str, const char *client_fif
         pid_t pid = fork();
         if (pid == 0) {
             // filho
-            close(pipe_fds[0]);
+            close(pipe_fds[0]); // só escreve
 
-            int grep_pipe[2];
-            pipe(grep_pipe);
-
-            pid_t grep_pid = fork();
-            if (grep_pid == 0) {
+            int grep_status = fork();
+            if (grep_status == 0) {
                 // neto executa grep
-                dup2(grep_pipe[1], STDOUT_FILENO);
-                close(grep_pipe[0]);
-                close(grep_pipe[1]);
+                int devnull = open("/dev/null", O_WRONLY);
+                dup2(devnull, STDOUT_FILENO);
+                dup2(devnull, STDERR_FILENO);
+                close(devnull);
                 execlp("grep", "grep", "-q", keyword, documents[i].path, NULL);
                 exit(2); // erro ao executar grep
             }
 
-            close(grep_pipe[1]);
             int status;
-            waitpid(grep_pid, &status, 0);
-
+            waitpid(grep_status, &status, 0);
             if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-                // documento contém a keyword
                 int doc_num;
                 sscanf(documents[i].key, "doc%d", &doc_num);
-                char msg[64];
+                char msg[32];
                 snprintf(msg, sizeof(msg), "%d\n", doc_num);
                 write(pipe_fds[1], msg, strlen(msg));
             }
-            close(grep_pipe[0]);
+
             close(pipe_fds[1]);
             exit(0);
         } else if (pid > 0) {
             active_procs++;
         } else {
-            perror("fork");
+            perror("Erro no fork");
         }
     }
 
+    // Espera por todos os filhos restantes
     while (active_procs-- > 0) {
         wait(NULL);
     }
 
-    // recolher resultados
+    // Recolhe os resultados
     close(pipe_fds[1]);
-    char result[2048] = "";
+    char result[2048] = "[";
     char line[64];
-    int first = 1;
-    strcat(result, "[");
-
     int n;
+    int first = 1;
     while ((n = read(pipe_fds[0], line, sizeof(line) - 1)) > 0) {
         line[n] = '\0';
         int doc_id = atoi(line);
-        char temp[32];
-        if (!first) {
-            strcat(result, ", ");
-        }
-        snprintf(temp, sizeof(temp), "%d", doc_id);
-        strcat(result, temp);
+        char tmp[32];
+        snprintf(tmp, sizeof(tmp), "%s%d", first ? "" : ", ", doc_id);
+        strcat(result, tmp);
         first = 0;
     }
-    close(pipe_fds[0]);
     strcat(result, "]\n");
+    close(pipe_fds[0]);
 
     send_response(client_fifo, result);
 }
