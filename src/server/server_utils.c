@@ -22,3 +22,4 @@ char* generate_key() {
     snprintf(key, sizeof(key), "doc%d", next_id++);
     return key;
 }
+

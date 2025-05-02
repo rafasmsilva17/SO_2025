@@ -29,6 +29,75 @@ Document* get_all_documents() {
     return docs;
 }
 
+void guardar_metadados(const char *filename) {
+    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        perror("Erro ao abrir ficheiro para escrita");
+        return;
+    }
+
+    char buffer[100000];
+    for (int i = 0; i < doc_count; i++) {
+        if (docs[i].active) {
+            int len = snprintf(buffer, sizeof(buffer), "%s|%s|%s|%s|%s|%d\n",
+                               docs[i].key,
+                               docs[i].title,
+                               docs[i].authors,
+                               docs[i].year,
+                               docs[i].path,
+                               docs[i].active);
+            if (write(fd, buffer, len) != len) {
+                perror("Erro ao escrever no ficheiro");
+                break;
+            }
+        }
+    }
+
+    close(fd);
+}
+
+int carregar_metadados(const char *filename) {
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        perror("Erro ao abrir ficheiro para leitura");
+        return 0;
+    }
+
+    char buffer[1000000];
+    int total_read = read(fd, buffer, sizeof(buffer) - 1);
+    close(fd);
+    if (total_read <= 0) return 0;
+
+    buffer[total_read] = '\0';
+
+    int count = 0;
+    char *line = strtok(buffer, "\n");
+    while (line && count < MAX_DOCS) {
+        int n = sscanf(line, "%15[^|]|%199[^|]|%199[^|]|%4[^|]|%63[^|]|%d",
+            docs[count].key,
+            docs[count].title,
+            docs[count].authors,
+            docs[count].year,
+            docs[count].path,
+            &docs[count].active);
+        if (n != 6) {
+            printf("Erro ao ler linha (esperado 6 campos, mas lidos %d): %s\n", n, line); // Debug
+        }
+        
+
+        count++;
+        line = strtok(NULL, "\n");
+    }
+
+    doc_count = count;
+
+    printf("Total de documentos lidos: %d\n", count);
+
+    return count;
+}
+
+
+
 // Retorna número total de documentos
 int get_total_documents() {
     return doc_count;

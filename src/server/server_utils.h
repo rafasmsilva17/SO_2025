@@ -5,5 +5,4 @@ void send_response(const char *client_fifo, const char *message);
 
 char* generate_key();
 
-
 #endif

@@ -22,7 +22,9 @@ int main() {
     }
 
     // Persistência e cache
-    //load_metadata_from_file();
+    int doc_count = carregar_metadados("../docs/metadados.txt");
+    printf("Carregados %d documentos do ficheiro\n", doc_count);
+
     //init_cache(20); // cache de 20 entradas (ou configurable)
 
     printf("Servidor aguardando no FIFO...\n");
@@ -74,7 +76,7 @@ int main() {
             }
 
         } else if (strcmp(op, "-f") == 0 && i == 2) {
-            //save_metadata_to_file();
+            guardar_metadados("../docs/metadados.txt");
             save = 0; //guarda no ficheiro
             send_response(client_fifo, "Server is shuting down\n");
             break;
@@ -82,12 +84,11 @@ int main() {
             send_response(client_fifo, "ERROR|Comando inválido ou mal formatado.\n");
         }
     }
-    /*
     // Encerramento
     if(save != 0){
-        save_metadata_to_file();
+        guardar_metadados("../docs/metadados.txt");
+
     }
-    free_cache();
-    */
+    //free_cache();
     return 0;
 }

@@ -3,6 +3,12 @@
 
 typedef struct document Document;
 
+#define MAX_DOCS 100000
+
+void guardar_metadados(const char *filename);
+
+int carregar_metadados(const char *filename);
+
 Document* get_all_documents();
 
 int get_total_documents();
