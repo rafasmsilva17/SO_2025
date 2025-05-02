@@ -13,7 +13,26 @@
 #define MAX_MSG 512
 #define SERVER_FIFO "../pipes/server_fifo"
 
-int main() {
+int cache_size = 0;
+
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "Uso: %s <document_folder> <cache_size>\n", argv[0]);
+        return 1;
+    }
+
+    // Recuperar os argumentos
+    const char *document_folder = argv[1];
+    cache_size = atoi(argv[2]); // Tamanho do cache
+
+    if (cache_size <= 0) {
+        fprintf(stderr, "Cache size deve ser um valor positivo.\n");
+        return 1;
+    }
+
+    // Carregar os metadados
+    char metadados_path[256];
+    snprintf(metadados_path, sizeof(metadados_path), "../%s/metadados.txt", document_folder);
     // Inicialização do servidor
     unlink(SERVER_FIFO);
     if (mkfifo(SERVER_FIFO, 0666) < 0) {
@@ -22,7 +41,7 @@ int main() {
     }
 
     // Persistência e cache
-    int doc_count = carregar_metadados("../docs/metadados.txt");
+    int doc_count = carregar_metadados(metadados_path);
     printf("Carregados %d documentos do ficheiro\n", doc_count);
 
     //init_cache(20); // cache de 20 entradas (ou configurable)
