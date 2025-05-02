@@ -55,6 +55,12 @@ void handle_add(char *args[], const char *client_fifo) {
 }
 
 void handle_consult(const char *key, const char *client_fifo) {
+    char* cached = get_from_cache(key);
+    if (cached) {
+        send_response(client_fifo, cached);
+        return;
+    }
+
     int idx = find_doc_index(key);
     if (idx == -1) {
         send_response(client_fifo, "ERROR|Documento não encontrado.\n");
@@ -64,6 +70,8 @@ void handle_consult(const char *key, const char *client_fifo) {
     char buffer[512];
     snprintf(buffer, sizeof(buffer), "OK|%s|%s|%s|%s\n",
              docs[idx].title, docs[idx].authors, docs[idx].year, docs[idx].path);
+
+    add_to_cache(key, buffer);
     send_response(client_fifo, buffer);
 }
 
