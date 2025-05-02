@@ -1,2 +1,2 @@
 *.txt
-| metadados.txt
+!metadados.txt
