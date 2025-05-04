@@ -23,3 +23,4 @@ char* generate_key() {
     return key;
 }
 
+

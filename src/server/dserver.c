@@ -9,6 +9,7 @@
 
 #include "server_utils.h"
 #include "document.h"
+#include "cache.h"
 
 #define MAX_MSG 512
 #define SERVER_FIFO "../pipes/server_fifo"
@@ -44,7 +45,7 @@ int main(int argc, char *argv[]) {
     int doc_count = carregar_metadados(metadados_path);
     printf("Carregados %d documentos do ficheiro\n", doc_count);
 
-    //init_cache(20); // cache de 20 entradas (ou configurable)
+    init_cache(cache_size); // cache de 20 entradas (ou configurable)
 
     printf("Servidor aguardando no FIFO...\n");
     int save = 1; //nao esta guardado no ficheiro
@@ -108,6 +109,6 @@ int main(int argc, char *argv[]) {
         guardar_metadados("../docs/metadados.txt");
 
     }
-    //free_cache();
+    free_cache();
     return 0;
 }

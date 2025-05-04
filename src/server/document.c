@@ -1,5 +1,6 @@
 #include "document.h"
 #include "server_utils.h"
+#include "cache.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,7 +12,6 @@
 #define SERVER_FIFO "../pipes/server_fifo"
 #define MAX_DOCS 100000
 #define BUFFER_SIZE 1024
-
 
 typedef struct document{
     char key[16];
@@ -111,7 +111,6 @@ int find_doc_index(const char *key) {
     }
     return -1;
 }
-
 void handle_add(char *args[], const char *client_fifo) {
     if (doc_count >= MAX_DOCS) {
         send_response(client_fifo, "ERROR|Limite de documentos atingido.\n");
@@ -119,6 +118,7 @@ void handle_add(char *args[], const char *client_fifo) {
     }
 
     char *key = generate_key();
+
     strcpy(docs[doc_count].key, key);
     strcpy(docs[doc_count].title, args[1]);
     strcpy(docs[doc_count].authors, args[2]);
@@ -127,15 +127,24 @@ void handle_add(char *args[], const char *client_fifo) {
     docs[doc_count].active = 1;
     doc_count++;
 
-    int key_number;
-    sscanf(key, "doc%d", &key_number);  // Extrai apenas o número
+    cache_invalidate(key);               // para consultas individuais
+    cache_invalidate_related(key);       // para resultados de pesquisa
 
+    int key_number;
+    sscanf(key, "doc%d", &key_number);
     char response[64];
     snprintf(response, sizeof(response), "Document %d indexed\n", key_number);
     send_response(client_fifo, response);
 }
 
+
 void handle_consult(const char *key, const char *client_fifo) {
+    const char* cached = cache_get(key);
+    if (cached) {
+        send_response(client_fifo, cached);
+        return;
+    }
+
     int idx = find_doc_index(key);
     if (idx == -1) {
         send_response(client_fifo, "ERROR|Documento não encontrado.\n");
@@ -143,23 +152,47 @@ void handle_consult(const char *key, const char *client_fifo) {
     }
 
     char buffer[512];
-    snprintf(buffer, sizeof(buffer), "Title: %s\nAuthors: %s\nYear: %s\nPath: %s\n",
-             docs[idx].title, docs[idx].authors, docs[idx].year, docs[idx].path);
+    snprintf(buffer, sizeof(buffer),
+             "Title: %s\nAuthors: %s\nYear: %s\nPath: %s\n",
+             docs[idx].title,
+             docs[idx].authors,
+             docs[idx].year,
+             docs[idx].path);
+
+    cache_put(key, buffer);  // Armazena na cache
     send_response(client_fifo, buffer);
 }
 
+
 void handle_delete(const char *key, const char *client_fifo) {
-    int idx = find_doc_index(key);
-    if (idx == -1) {
-        send_response(client_fifo, "ERROR|Documento não encontrado.\n");
+    Document *documents = get_all_documents();
+    int total = get_total_documents();
+    int doc_id = -1;
+    int found = 0;
+
+    for (int i = 0; i < total; i++) {
+        if (documents[i].active && strcmp(documents[i].key, key) == 0) {
+            documents[i].active = 0;
+            found = 1;
+            sscanf(key, "doc%d", &doc_id);  // extrai o número do doc
+            break;
+        }
+    }
+
+    if (!found) {
+        send_response(client_fifo, "Documento não encontrado ou já removido.\n");
         return;
     }
 
-    docs[idx].active = 0;
-    char response [64];
-    snprintf(response, sizeof(response), "Index entry %d deleted\n", idx);
-    send_response(client_fifo, response);
+    if (doc_id != -1) {
+        invalidate_cache_by_doc_id(doc_id);  // remove entradas de cache que o incluam
+    }
+
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Index entry %d deleted\n", doc_id);
+    send_response(client_fifo, msg);
 }
+
 
 void handle_lines(const char *key, const char *keyword, const char *client_fifo) {
     int idx = find_doc_index(key);
@@ -191,7 +224,14 @@ void handle_lines(const char *key, const char *keyword, const char *client_fifo)
         send_response(client_fifo, response);
     }
 }
+
 void handle_search(char *keyword, char *nr_processes_str, const char *client_fifo) {
+    const char* cached = cache_get(keyword);
+    if (cached) {
+        send_response(client_fifo, cached);
+        return;
+    }
+
     int max_procs = 1;
     if (nr_processes_str != NULL) {
         max_procs = atoi(nr_processes_str);
@@ -222,18 +262,16 @@ void handle_search(char *keyword, char *nr_processes_str, const char *client_fif
 
         pid_t pid = fork();
         if (pid == 0) {
-            // filho
-            close(pipe_fds[0]); // só escreve
+            close(pipe_fds[0]);
 
             int grep_status = fork();
             if (grep_status == 0) {
-                // neto executa grep
                 int devnull = open("/dev/null", O_WRONLY);
                 dup2(devnull, STDOUT_FILENO);
                 dup2(devnull, STDERR_FILENO);
                 close(devnull);
                 execlp("grep", "grep", "-q", keyword, documents[i].path, NULL);
-                exit(2); // erro ao executar grep
+                exit(2);
             }
 
             int status;
@@ -255,12 +293,10 @@ void handle_search(char *keyword, char *nr_processes_str, const char *client_fif
         }
     }
 
-    // Espera por todos os filhos restantes
     while (active_procs-- > 0) {
         wait(NULL);
     }
 
-    // Recolhe os resultados
     close(pipe_fds[1]);
     char result[2048] = "[";
     char line[64];
@@ -277,5 +313,6 @@ void handle_search(char *keyword, char *nr_processes_str, const char *client_fif
     strcat(result, "]\n");
     close(pipe_fds[0]);
 
+    cache_put(keyword, result);  // Coloca o resultado mais recente na cache
     send_response(client_fifo, result);
 }

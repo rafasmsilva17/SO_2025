@@ -2,10 +2,10 @@ CC=gcc
 CFLAGS=-Wall -Wextra
 
 CLIENT_SRC=client/dclient.c client/client_utils.c
-SERVER_SRC=server/dserver.c server/document.c server/server_utils.c
+SERVER_SRC=server/dserver.c server/document.c server/server_utils.c server/cache.c
 
 CLIENT_HDR = client/client_utils.h
-SERVER_HDR = server/server_utils.h server/document.h
+SERVER_HDR = server/server_utils.h server/document.h server/cache.h
 
 CLIENT_BIN=bin/dclient
 SERVER_BIN=bin/dserver
