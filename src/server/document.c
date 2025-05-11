@@ -13,7 +13,7 @@
 #define MAX_DOCS 100000
 #define BUFFER_SIZE 1024
 
-typedef struct document{
+typedef struct document {
     char key[16];
     char title[200];
     char authors[200];
@@ -84,7 +84,6 @@ int carregar_metadados(const char *filename) {
             printf("Erro ao ler linha (esperado 6 campos, mas lidos %d): %s\n", n, line); // Debug
         }
         
-
         count++;
         line = strtok(NULL, "\n");
     }
@@ -95,8 +94,6 @@ int carregar_metadados(const char *filename) {
 
     return count;
 }
-
-
 
 // Retorna número total de documentos
 int get_total_documents() {
@@ -111,6 +108,7 @@ int find_doc_index(const char *key) {
     }
     return -1;
 }
+
 void handle_add(char *args[], const char *client_fifo) {
     if (doc_count >= MAX_DOCS) {
         send_response(client_fifo, "ERROR|Limite de documentos atingido.\n");
@@ -127,8 +125,16 @@ void handle_add(char *args[], const char *client_fifo) {
     docs[doc_count].active = 1;
     doc_count++;
 
-    cache_invalidate(key);               // para consultas individuais
-    cache_invalidate_related(key);       // para resultados de pesquisa
+    // Agora fornecemos um part_key específico (exemplo: "title", "author", etc.)
+    cache_invalidate(docs[doc_count - 1].key, "title");               // Invalida a parte "title"
+    cache_invalidate(docs[doc_count - 1].key, "author");              // Invalida a parte "author"
+    cache_invalidate(docs[doc_count - 1].key, "year");                // Invalida a parte "year"
+    cache_invalidate(docs[doc_count - 1].key, "path");                // Invalida a parte "path"
+
+    cache_invalidate_related(docs[doc_count - 1].key, "title");       // Invalida resultados relacionados com "title"
+    cache_invalidate_related(docs[doc_count - 1].key, "author");      // Invalida resultados relacionados com "author"
+    cache_invalidate_related(docs[doc_count - 1].key, "year");        // Invalida resultados relacionados com "year"
+    cache_invalidate_related(docs[doc_count - 1].key, "path");        // Invalida resultados relacionados com "path"
 
     int key_number;
     sscanf(key, "doc%d", &key_number);
@@ -139,9 +145,17 @@ void handle_add(char *args[], const char *client_fifo) {
 
 
 void handle_consult(const char *key, const char *client_fifo) {
-    const char* cached = cache_get(key);
-    if (cached) {
-        send_response(client_fifo, cached);
+    const char* cached_title = cache_get(key, "title");
+    const char* cached_author = cache_get(key, "author");
+    const char* cached_year = cache_get(key, "year");
+    const char* cached_path = cache_get(key, "path");
+
+    if (cached_title && cached_author && cached_year && cached_path) {
+        char response[512];
+        snprintf(response, sizeof(response),
+                 "Title: %s\nAuthors: %s\nYear: %s\nPath: %s\n",
+                 cached_title, cached_author, cached_year, cached_path);
+        send_response(client_fifo, response);
         return;
     }
 
@@ -159,10 +173,14 @@ void handle_consult(const char *key, const char *client_fifo) {
              docs[idx].year,
              docs[idx].path);
 
-    cache_put(key, buffer);  // Armazena na cache
+    // Armazenar na cache partes do conteúdo
+    cache_put(key, "title", docs[idx].title);
+    cache_put(key, "author", docs[idx].authors);
+    cache_put(key, "year", docs[idx].year);
+    cache_put(key, "path", docs[idx].path);
+
     send_response(client_fifo, buffer);
 }
-
 
 void handle_delete(const char *key, const char *client_fifo) {
     Document *documents = get_all_documents();
@@ -192,7 +210,6 @@ void handle_delete(const char *key, const char *client_fifo) {
     snprintf(msg, sizeof(msg), "Index entry %d deleted\n", doc_id);
     send_response(client_fifo, msg);
 }
-
 
 void handle_lines(const char *key, const char *keyword, const char *client_fifo) {
     int idx = find_doc_index(key);
@@ -226,7 +243,7 @@ void handle_lines(const char *key, const char *keyword, const char *client_fifo)
 }
 
 void handle_search(char *keyword, char *nr_processes_str, const char *client_fifo) {
-    const char* cached = cache_get(keyword);
+    const char* cached = cache_get(keyword, "search_results");
     if (cached) {
         send_response(client_fifo, cached);
         return;
@@ -306,13 +323,14 @@ void handle_search(char *keyword, char *nr_processes_str, const char *client_fif
         line[n] = '\0';
         int doc_id = atoi(line);
         char tmp[32];
-        snprintf(tmp, sizeof(tmp), "%s%d", first ? "" : ", ", doc_id);
-        strcat(result, tmp);
-        first = 0;
+        snprintf(tmp, sizeof(tmp), "%s%d", first ? "" : ",", doc_id);
+    strcat(result, tmp);
+    first = 0;
     }
     strcat(result, "]\n");
-    close(pipe_fds[0]);
 
-    cache_put(keyword, result);  // Coloca o resultado mais recente na cache
+    cache_put(keyword, "search_results", result);
+
     send_response(client_fifo, result);
+
 }

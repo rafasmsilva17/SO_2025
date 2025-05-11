@@ -10,6 +10,8 @@ SERVER_HDR = server/server_utils.h server/document.h server/cache.h
 CLIENT_BIN=bin/dclient
 SERVER_BIN=bin/dserver
 
+SCRIPTS_DIR=scripts_teste
+
 all: $(CLIENT_BIN) $(SERVER_BIN)
 
 $(CLIENT_BIN): $(CLIENT_SRC) $(CLIENT_HDR)
@@ -21,4 +23,15 @@ $(SERVER_BIN): $(SERVER_SRC) $(SERVER_HDR)
 	$(CC) $(CFLAGS) -o $@ $(SERVER_SRC)
 
 clean:
-	rm -rf bin pipes/client_*_fifo
+	rm -rf bin pipes/client_*_fifo resultados_teste/resultados_paralelo.txt resultados_teste/resultados_cache.txt
+
+test_cache: $(SERVER_BIN) $(CLIENT_BIN)
+	@echo "Executando teste de cache..."
+	chmod +x scripts_teste/teste_cache.sh
+	scripts_teste/teste_cache.sh
+
+test_paralelo: $(SERVER_BIN) $(CLIENT_BIN)
+	@echo "Executando teste de paralelismo..."
+	chmod +x scripts_teste/teste_paralelo.sh
+	scripts_teste/teste_paralelo.sh
+

@@ -1,7 +1,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "cache.h"
+#include <time.h>
+
+typedef struct {
+    int valid;
+    char key[256];           // Chave do documento
+    char part_key[256];      // Chave da parte do conteúdo (ex: "title", "author", etc.)
+    char part_content[1024]; // Conteúdo da parte
+    time_t last_access;      // Último acesso
+} CacheEntry;
 
 CacheEntry *cache = NULL;
 int cache_capacity = 0;
@@ -17,7 +25,8 @@ void init_cache(int size) {
     for (int i = 0; i < cache_capacity; i++) {
         cache[i].valid = 0;
         cache[i].key[0] = '\0';
-        cache[i].content[0] = '\0';
+        cache[i].part_key[0] = '\0';
+        cache[i].part_content[0] = '\0';
         cache[i].last_access = 0;
     }
 }
@@ -30,27 +39,24 @@ void free_cache() {
     }
 }
 
-
-const char* cache_get(const char *key) {
+const char* cache_get(const char *key, const char *part_key) {
     for (int i = 0; i < cache_capacity; i++) {
-        if (cache[i].valid && strcmp(cache[i].key, key) == 0) {
+        if (cache[i].valid && strcmp(cache[i].key, key) == 0 && strcmp(cache[i].part_key, part_key) == 0) {
             cache[i].last_access = time(NULL);  // Atualiza o timestamp!
-            return cache[i].content;
+            return cache[i].part_content;
         }
     }
     return NULL;
 }
 
-
-
-void cache_put(const char *key, const char *content) {
+void cache_put(const char *key, const char *part_key, const char *content) {
     time_t now = time(NULL);
     int updated = 0;
 
-    // Atualiza se já existe
+    // Tenta atualizar se já existe
     for (int i = 0; i < cache_capacity; i++) {
-        if (cache[i].valid && strcmp(cache[i].key, key) == 0) {
-            strncpy(cache[i].content, content, sizeof(cache[i].content));
+        if (cache[i].valid && strcmp(cache[i].key, key) == 0 && strcmp(cache[i].part_key, part_key) == 0) {
+            strncpy(cache[i].part_content, content, sizeof(cache[i].part_content));
             cache[i].last_access = now;
             updated = 1;
             break;
@@ -63,7 +69,8 @@ void cache_put(const char *key, const char *content) {
             if (!cache[i].valid) {
                 cache[i].valid = 1;
                 strncpy(cache[i].key, key, sizeof(cache[i].key));
-                strncpy(cache[i].content, content, sizeof(cache[i].content));
+                strncpy(cache[i].part_key, part_key, sizeof(cache[i].part_key));
+                strncpy(cache[i].part_content, content, sizeof(cache[i].part_content));
                 cache[i].last_access = now;
                 updated = 1;
                 break;
@@ -83,31 +90,32 @@ void cache_put(const char *key, const char *content) {
         }
 
         strncpy(cache[oldest_index].key, key, sizeof(cache[oldest_index].key));
-        strncpy(cache[oldest_index].content, content, sizeof(cache[oldest_index].content));
+        strncpy(cache[oldest_index].part_key, part_key, sizeof(cache[oldest_index].part_key));
+        strncpy(cache[oldest_index].part_content, content, sizeof(cache[oldest_index].part_content));
         cache[oldest_index].last_access = now;
         cache[oldest_index].valid = 1;
     }
-
 }
 
-
-void cache_invalidate(const char* key) {
+void cache_invalidate(const char *key, const char *part_key) {
     for (int i = 0; i < cache_capacity; i++) {
-        if (cache[i].valid && strcmp(cache[i].key, key) == 0) {
+        if (cache[i].valid && strcmp(cache[i].key, key) == 0 && strcmp(cache[i].part_key, part_key) == 0) {
             cache[i].valid = 0;
             cache[i].key[0] = '\0';
-            cache[i].content[0] = '\0';
+            cache[i].part_key[0] = '\0';
+            cache[i].part_content[0] = '\0';
             return;
         }
     }
 }
 
-void cache_invalidate_related(const char *doc_key) {
+void cache_invalidate_related(const char *doc_key, const char *part_key) {
     for (int i = 0; i < cache_capacity; i++) {
-        if (cache[i].valid && strstr(cache[i].content, doc_key) != NULL) {
+        if (cache[i].valid && strcmp(cache[i].key, doc_key) == 0 && strcmp(cache[i].part_key, part_key) == 0) {
             cache[i].valid = 0;
             cache[i].key[0] = '\0';
-            cache[i].content[0] = '\0';
+            cache[i].part_key[0] = '\0';
+            cache[i].part_content[0] = '\0';
         }
     }
 }
@@ -120,9 +128,9 @@ void invalidate_cache_by_doc_id(int doc_id) {
         if (!cache[i].valid) continue;
 
         // Evitar falso positivo: verifica se é número isolado
-        char *found = cache[i].content;
+        char *found = cache[i].part_content;
         while ((found = strstr(found, pattern)) != NULL) {
-            char before = (found == cache[i].content) ? '[' : *(found - 1);
+            char before = (found == cache[i].part_content) ? '[' : *(found - 1);
             char after = *(found + strlen(pattern));
 
             if ((before == '[' || before == ',' || before == ' ') &&
@@ -135,4 +143,3 @@ void invalidate_cache_by_doc_id(int doc_id) {
         }
     }
 }
-
