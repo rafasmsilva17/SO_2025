@@ -45,10 +45,10 @@ int main(int argc, char *argv[]) {
     int doc_count = carregar_metadados(metadados_path);
     printf("Carregados %d documentos do ficheiro\n", doc_count);
 
-    init_cache(cache_size); // cache de 20 entradas (ou configurable)
+    init_cache(cache_size); 
 
     printf("Servidor aguardando no FIFO...\n");
-    int save = 1; //nao esta guardado no ficheiro
+    int save = 1; 
     char buffer[MAX_MSG];
 
     while (1) {
@@ -90,14 +90,14 @@ int main(int argc, char *argv[]) {
             handle_lines(args[1], args[2], client_fifo);
         } else if (strcmp(op, "-s") == 0 && (i == 3 || i == 4)) {
             if (i == 3) {
-                handle_search(args[1], NULL, client_fifo); // sem limite de processos
+                handle_search(args[1], NULL, client_fifo); 
             } else {
-                handle_search(args[1], args[2], client_fifo); // com limite
+                handle_search(args[1], args[2], client_fifo); 
             }
 
         } else if (strcmp(op, "-f") == 0 && i == 2) {
             guardar_metadados("../docs/metadados.txt");
-            save = 0; //guarda no ficheiro
+            save = 0; 
             send_response(client_fifo, "Server is shuting down\n");
             break;
         } else {
